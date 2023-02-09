@@ -1,0 +1,174 @@
+Effective Sample Size Under ANCOVA
+================
+Hongtao Zhang
+2023-02-08
+
+This write-up explores the performance of expected
+local-information-ratio (ELIR) effective sample size (ESS) under an
+ANVOCA model.
+
+Set up the stage. JAGS is required for Bayesian computing.
+
+``` r
+set.seed(20230208)
+library(RBesT)
+library(rjags)
+library(mvtnorm)
+```
+
+Consider a two arm pediatric trial in which the endpoint is the change
+from baseline at a certain time point. A negative value indicates a
+treatment benefit. We simulate both the baseline and post-baseline
+values from a bivariate normal distribution respectively in the
+treatment and control group.
+
+``` r
+#total sample size
+n_total <- 120
+#randomization ratio: treatment:control
+RRatio <- 2 
+#baseline and post-baseline mean
+ped_means_pbo <- c(8.0, 8.0) 
+ped_means_active <- c(8.0, 8.0)
+#covariance matrix, same for treatment and control arms
+ped_vcov <- matrix(c(1.0^2, 0.4, 0.4, 1.43^2), nrow=2)
+```
+
+Simulate the data and calculate the change from baseline.
+
+``` r
+pbo_dat <- rmvnorm((1/(1+RRatio))*n_total, ped_means_pbo, ped_vcov)
+active_dat <- rmvnorm((RRatio/(1+RRatio))*n_total, ped_means_active, ped_vcov)
+total_dat <- rbind(cbind(pbo_dat, rep(0, (1/(1+RRatio))*n_total)), cbind(active_dat, rep(1, (RRatio/(1+RRatio))*n_total)))
+
+alldt <- as.data.frame(cbind(total_dat, total_dat[,2]-total_dat[,1]))
+colnames(alldt) <- c('Base', "Aval", 'TRTP', 'Chg')
+
+head(alldt)
+```
+
+    ##       Base     Aval TRTP        Chg
+    ## 1 8.974384 9.532289    0  0.5579048
+    ## 2 9.614237 8.477695    0 -1.1365418
+    ## 3 6.490913 6.634282    0  0.1433687
+    ## 4 8.297193 6.778546    0 -1.5186468
+    ## 5 7.808479 7.188972    0 -0.6195069
+    ## 6 7.178329 8.232133    0  1.0538040
+
+The change from baseline is assumed to follow a normal distribution with
+fixed standard deviation $\sigma$, calculated from the data. A Bayesian
+ANVOCA model is fitted $$E(Chg) = \beta_0 + \beta_1*Base + \delta*Trt.$$
+The BUGS code for this model:
+
+``` r
+jags.script <- "
+  model{
+    for(i in 1:n) {
+      y[i] ~ dnorm(mu[i], 1/ped_var)
+      mu[i] <- beta0 + beta1*x[i,1] + delta_p*x[i,3]
+    }
+    beta0 ~ dnorm(0, 1/10000)
+    beta1 ~ dnorm(0, 1/10000)
+    delta_p ~ dnorm(adult_mean, 1/adult_var)
+  }
+"
+```
+
+Non-informative nomral priors are used for $\beta_0$ and $\beta_1$. The
+parameter of interest is the treatment effect $\delta$, for which a
+normal prior is derived from adult data.
+
+``` r
+prior_m <- -0.6
+prior_s <- 0.6
+(prior_mix <- mixnorm(c(1, prior_m, prior_s), param="ms"))
+```
+
+    ## Univariate normal mixture
+    ## Mixture Components:
+    ##   comp1
+    ## w  1.0 
+    ## m -0.6 
+    ## s  0.6
+
+Before the prior ESS can be computed, a “reference scale” must be
+assgined to the prior distribution *`prior_mix`* as required by *RBesT*
+package. This quantity is essentially the standard deviation of the
+underlying endpoint which the prior distribution is for. Since $\delta$
+is the difference (treatment versus control) in changes from baseline
+and we assumed each component has a fixed standard deviation $\sigma$,
+the reference scale is then $\sqrt{2}\sigma$. With that, the ELIR ESS
+can be computed.
+
+``` r
+sigma(prior_mix) <- sqrt(2)*sd(alldt$Chg)
+(prior_ess <- ess(prior_mix, "elir"))
+```
+
+    ## [1] 11.16581
+
+We then fit the ANCOVA model, obtain a posterior sample of $\delta$ and
+derive the posterior ELIR ESS. Note that JAGS use the precision
+parameterization for normal distributions, as opposed to standard
+deviation.
+
+``` r
+jags_data <- list(x = alldt[,1:3], y = alldt[,4], 
+                  n = nrow(alldt),
+                  adult_mean = prior_m,
+                  adult_var = prior_s^2,
+                  ped_var = var(alldt$Chg)
+)
+
+jag_obj <- jags.model(textConnection(jags.script),
+                      data = jags_data,
+                      n.chains = 3, 
+                      n.adapt = 2000,
+                      quiet = T
+)
+
+jags_sample <- coda.samples(model=jag_obj,
+                            variable.names = c('delta_p'),
+                            n.iter=12000, 
+                            thin = 2
+)
+tt<- unlist(jags_sample)
+```
+
+The posterior distribution of $\delta$ might be unknown. Therefore, It
+has to be approximated by a weighted mixture of normal distribution
+before an ESS can be computed. We also need to assign the same reference
+scale to the mixture.
+
+``` r
+(post_hat <- automixfit(tt, type="norm"))
+```
+
+    ## EM for Normal Mixture Model
+    ## Log-Likelihood = -631.5433
+    ## 
+    ## Univariate normal mixture
+    ## Mixture Components:
+    ##   comp1    
+    ## w 1.0000000
+    ## m 0.1363273
+    ## s 0.2506111
+
+``` r
+sigma(post_hat) <- sqrt(2)*sd(alldt$Chg)
+(post_ess <- ess(post_hat, "elir"))
+```
+
+    ## [1] 64.00178
+
+**The difference between posterior and prior ESS does not equal the
+sample size 120. In simulation (500 iterations), the mean difference is
+53. ELIR ESS behaves very similar to other ESS definitions, namely,
+Morita and moment. The predictive consistency property does not seem to
+hold. **
+
+``` r
+post_ess - prior_ess
+```
+
+    ## [1] 52.83597

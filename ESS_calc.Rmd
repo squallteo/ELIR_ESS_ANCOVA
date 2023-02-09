@@ -2,7 +2,7 @@
 title: "Effective Sample Size Under ANCOVA"
 author: "Hongtao Zhang"
 date: "2023-02-08"
-output: html_document
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
