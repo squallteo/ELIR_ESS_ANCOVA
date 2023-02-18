@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-This write-up explores the performance of expected local-information-ratio (ELIR) effective sample size (ESS) under an ANVOCA model. 
+This write-up explores how the expected local-information-ratio (ELIR) effective sample size (ESS) can be computed under an ANVOCA model. 
 
 Set up the stage. JAGS is required for Bayesian computing. 
 ```{r, message=FALSE, warning=FALSE}
@@ -61,7 +61,7 @@ jags.script <- "
 "
 ```
 
-Non-informative nomral priors are used for $\beta_0$ and $\beta_1$. The parameter of interest is the treatment effect $\delta$, for which a normal prior is derived from adult data. 
+Non-informative normal priors are used for $\beta_0$ and $\beta_1$. The parameter of interest is the treatment effect $\delta$, for which a normal prior is derived from adult data. 
 ```{r}
 prior_m <- -0.6
 prior_s <- 0.6

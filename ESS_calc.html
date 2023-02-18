@@ -370,9 +370,9 @@ pre code {
 </div>
 
 
-<p>This write-up explores the performance of expected
-local-information-ratio (ELIR) effective sample size (ESS) under an
-ANVOCA model.</p>
+<p>This write-up explores how the expected local-information-ratio
+(ELIR) effective sample size (ESS) can be computed under an ANVOCA
+model.</p>
 <p>Set up the stage. JAGS is required for Bayesian computing.</p>
 <pre class="r"><code>set.seed(20230208)
 library(RBesT)
@@ -476,24 +476,24 @@ before an ESS can be computed. We also need to assign the same reference
 scale to the mixture.</p>
 <pre class="r"><code>(post_hat &lt;- automixfit(tt, type=&quot;norm&quot;))</code></pre>
 <pre><code>## EM for Normal Mixture Model
-## Log-Likelihood = -819.0947
+## Log-Likelihood = -645.8594
 ## 
 ## Univariate normal mixture
 ## Mixture Components:
 ##   comp1    
 ## w 1.0000000
-## m 0.1423663
-## s 0.2532360</code></pre>
+## m 0.1392945
+## s 0.2508105</code></pre>
 <pre class="r"><code>sigma(post_hat) &lt;- sqrt(2)*sd(alldt$Chg)
 (post_ess &lt;- ess(post_hat, &quot;elir&quot;))</code></pre>
-<pre><code>## [1] 62.68185</code></pre>
+<pre><code>## [1] 63.90005</code></pre>
 <p><strong>The difference between posterior and prior ESS does not equal
 the sample size 120. In simulation (500 iterations), the mean difference
 is 53. ELIR ESS behaves very similar to other ESS definitions, namely,
 Morita and moment. The predictive consistency property does not seem to
 hold. </strong></p>
 <pre class="r"><code>post_ess - prior_ess</code></pre>
-<pre><code>## [1] 51.51603</code></pre>
+<pre><code>## [1] 52.73424</code></pre>
 
 
 
